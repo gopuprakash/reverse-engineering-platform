@@ -1,0 +1,22 @@
+Analyze this {{ language }} code and extract all business logic.
+
+Code (max 12000 chars):
+{{ code }}
+
+Return strict JSON with this schema:
+{
+  "business_rules": [
+    {
+      "title": str,
+      "description": str,
+      "rule_type": "validation|calculation|workflow|eligibility|constraint|configuration",
+      "conditions": [...],
+      "actions": [...],
+      "affected_entities": [str],
+      "line_start": int,
+      "line_end": int,
+      "code_snippet": str,
+      "confidence": float
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+codebases:
+  - id: order-management-system
+    name: Order Management System
+    source: C:/srv/repos/Order-Management-System
+    language: python
+    priority: 1
+    entry_points:
+      - main.py
+
+ # - id: payment-gateway
+ #  name: Legacy Payment Gateway
+ #  source: https://github.com/corp/payment-gateway-legacy.git
+ #  language: csharp
+ #  priority: 2
