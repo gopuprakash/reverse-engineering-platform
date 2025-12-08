@@ -1,79 +1,195 @@
-﻿# src/orchestrator.py
-import asyncio
+﻿import asyncio
 import yaml
+import uuid
+from typing import List, Tuple
 from loguru import logger
+
+# Config & Core Modules
 from src.config import settings
 from src.repo_manager import RepoManager
 from src.mcp_server import RepoMCPServer
 from src.knowledge_base import KnowledgeBaseManager
 from src.models import CodebaseMetadata
+from src.exceptions import RepositoryError, LLMError
+
+# Database Layer
+from src.db.config import SessionLocal
+from src.db.repository import GraphRepository
+from src.db.models import Project, AnalysisRun
+
+# Static Analysis (The Indexer)
+# Note: Ensure src/static_analysis.py exists with a StaticAnalyzer class
+from src.static_analysis import StaticAnalyzer 
 
 async def run_analysis():
-    logger.add("logs/analysis_{time:YYYYMMDD}.log", rotation="7 days")
-
-    # 1. Load Config
-    try:
-        with open("config/codebases.yaml") as f:
-            config = yaml.safe_load(f)
-    except:
-        logger.error("config/codebases.yaml not found! Creating example...")
-        example = {"codebases": [{"id": "my-project", "name": "My Project", "source": "projects/my-app", "language": "python"}]}
-        import json
-        with open("config/codebases.yaml", "w") as f:
-            yaml.dump(example, f)
-        logger.info("Created example config/codebases.yaml — please edit it!")
-        return
-
-    # 2. Initialize Managers
-    repo_manager = RepoManager()
-    mcp = RepoMCPServer(repo_manager)
-    kb = KnowledgeBaseManager()
-
-    # 3. Discovery Phase
-    all_files = []
-    for cb in config["codebases"]:
-        meta = CodebaseMetadata(**cb)
-        path = repo_manager.ensure_local_repo(meta.source)
-        files = list(repo_manager.list_source_files(path))
-        logger.info(f"Found {len(files)} files in {meta.name}")
-        all_files.extend([(f, meta.language) for f in files])
-
-    if not all_files:
-        logger.warning("No files found to analyze. Check your config paths.")
-        return
-
-    # --- Fix D: Generate Global Context (File Tree) ---
-    # We create a simple list of files to help the LLM understand the project structure
-    # This helps it know that 'from src.utils import x' refers to a valid file.
-    file_structure = "Project File Structure:\n" + "\n".join([f"- {f}" for f, _ in all_files])
-
-    # --- Fix E: Concurrency Control ---
-    # We use a semaphore to limit the number of parallel LLM calls based on config
-    sem = asyncio.Semaphore(settings.max_concurrent_jobs)
-
-    async def analyze_file_bounded(file_path, lang):
-        async with sem:
-            # We pass the global context here
-            return await mcp.extract_business_rules_from_file(
-                file_path, 
-                lang, 
-                context=file_structure
-            )
-
-    # 4. Execution Phase
-    logger.info(f"Starting analysis of {len(all_files)} files with concurrency limit: {settings.max_concurrent_jobs}...")
+    """
+    Main entry point for the Reverse Engineering Platform.
     
-    tasks = [analyze_file_bounded(f, lang) for f, lang in all_files]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    Phases:
+    1. Discovery: Locate repositories and register projects in DB.
+    2. Indexing: Parse code to build the Dependency Graph (Nodes/Edges).
+    3. Analysis: Use LLM + Graph Context to extract business rules.
+    """
+    
+    # 0. System Initialization
+    logger.add("logs/orchestrator_{time:YYYYMMDD}.log", rotation="50 MB", retention="10 days")
+    logger.info("Initializing Orchestrator...")
+    
+    db_session = SessionLocal()
+    
+    try:
+        # Load Configuration
+        try:
+            with open("config/codebases.yaml") as f:
+                config_data = yaml.safe_load(f)
+        except FileNotFoundError:
+            logger.critical("Configuration file 'config/codebases.yaml' not found.")
+            return
 
-    # 5. Storage Phase
-    valid_results_count = 0
-    for r in results:
-        if isinstance(r, dict) and r.get("status") == "success":
-            await kb.store_findings(r)
-            valid_results_count += 1
-        elif isinstance(r, Exception):
-            logger.error(f"Task failed with exception: {r}")
+        # Initialize Managers
+        repo_manager = RepoManager()
+        mcp_server = RepoMCPServer(repo_manager)
+        kb_manager = KnowledgeBaseManager() # Manages Business Rules storage
+        graph_repo = GraphRepository(db_session) # Manages Dependency Graph
+        static_analyzer = StaticAnalyzer(repo_manager) # Parses imports/signatures
 
-    kb.get_summary()
-    logger.success(f"ANALYSIS COMPLETE! Processed {valid_results_count}/{len(all_files)} files successfully.")
+        # ---------------------------------------------------------
+        # PHASE 1: DISCOVERY & REGISTRATION
+        # ---------------------------------------------------------
+        logger.info("--- PHASE 1: DISCOVERY & REGISTRATION ---")
+        
+        # Structure: (project_id, file_path, language, run_id)
+        active_files: List[Tuple[str, str, str, str]] = []
+        
+        for cb_config in config_data.get("codebases", []):
+            try:
+                metadata = CodebaseMetadata(**cb_config)
+                
+                # A. Ensure Project Exists in DB
+                project = db_session.query(Project).filter(Project.id == metadata.id).first()
+                if not project:
+                    logger.info(f"Registering new project: {metadata.name}")
+                    project = Project(id=metadata.id, name=metadata.name)
+                    db_session.add(project)
+                    db_session.commit()
+                
+                # B. Clone/Locate Repo
+                local_path = repo_manager.ensure_local_repo(metadata.source)
+                
+                # C. Register Analysis Run
+                run_id = uuid.uuid4()
+                run_record = AnalysisRun(run_id=run_id, project_id=metadata.id, status="INDEXING")
+                db_session.add(run_record)
+                db_session.commit()
+                logger.info(f"Started Run {run_id} for {metadata.name}")
+
+                # D. List Files
+                files = list(repo_manager.list_source_files(local_path))
+                logger.info(f"Found {len(files)} source files in {metadata.id}")
+                
+                for f in files:
+                    active_files.append((metadata.id, f, metadata.language, str(run_id)))
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize codebase {cb_config.get('name', 'Unknown')}: {e}")
+                continue
+
+        if not active_files:
+            logger.warning("No files found to process. Exiting.")
+            return
+
+        # ---------------------------------------------------------
+        # PHASE 2: INDEXING (BUILD THE GRAPH)
+        # ---------------------------------------------------------
+        logger.info(f"--- PHASE 2: INDEXING ({len(active_files)} files) ---")
+        
+        indexing_success_count = 0
+        
+        for proj_id, file_path, lang, _ in active_files: # Ignore run_id for indexing
+            try:
+                # 1. Static Analysis (Fast, CPU-bound)
+                file_meta = static_analyzer.scan_file(file_path, lang)
+                
+                # 2. Store Summary (Node)
+                graph_repo.save_summary(
+                    file_path=file_path,
+                    summary=file_meta.summary_content,
+                    # Optional: Compute embedding here if static analyzer supports it
+                    embedding=None 
+                )
+                
+                # 3. Store Dependencies (Edges)
+                for imported_module in file_meta.imports:
+                    # Note: You might need a resolver logic here to map 'module' -> 'file_path'
+                    # For now, we store the raw import string or a resolved path if available
+                    graph_repo.add_dependency(
+                        source=file_path,
+                        target=imported_module, # e.g., "src.utils"
+                        type="import"
+                    )
+                
+                indexing_success_count += 1
+                
+            except Exception as e:
+                logger.warning(f"Indexing failed for {file_path}: {e}")
+        
+        logger.success(f"Indexing complete. Graph populated with {indexing_success_count} nodes.")
+
+        # Update run status
+        # Note: In a real multi-project run, we'd update each run_id. 
+        # For simplicity, we assume we are running the context of the last active run or handle globally.
+
+        # ---------------------------------------------------------
+        # PHASE 3: ANALYSIS (LLM + GRAPH RAG)
+        # ---------------------------------------------------------
+        logger.info("--- PHASE 3: SEMANTIC ANALYSIS ---")
+        
+        # Concurrency Control
+        sem = asyncio.Semaphore(settings.max_concurrent_jobs)
+
+        async def process_file_bounded(pid: str, fpath: str, lng: str, rid: str):
+            async with sem:
+                try:
+                    # 1. GRAPH LOOKUP: Get Context specifically for this file
+                    # This replaces the old "all files list"
+                    smart_context = graph_repo.get_smart_context(fpath)
+                    
+                    # 2. LLM CALL: Extract Rules
+                    result = await mcp_server.extract_business_rules_from_file(
+                        file_path=fpath, 
+                        language=lng, 
+                        context=smart_context
+                    )
+                    
+                    # 3. STORAGE: Save Rules
+                    if result.get("status") == "success":
+                        await kb_manager.store_findings(result, rid)
+                        return True
+                    else:
+                        logger.warning(f"LLM extraction failed for {fpath}: {result.get('error')}")
+                        return False
+
+                except Exception as e:
+                    logger.error(f"Critical failure processing {fpath}: {e}")
+                    return False
+
+        # Execute Parallel Tasks
+        tasks = [process_file_bounded(pid, f, l, rid) for pid, f, l, rid in active_files]
+        
+        # Show progress bar if tqdm is desired, otherwise await gather
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        success_count = sum(1 for r in results if r is True)
+        logger.success(f"Analysis Complete. Processed {success_count}/{len(active_files)} files successfully.")
+
+    except Exception as e:
+        logger.critical(f"Orchestrator crashed: {e}")
+        raise
+    finally:
+        db_session.close()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(run_analysis())
+    except KeyboardInterrupt:
+        logger.info("Shutdown requested by user.")

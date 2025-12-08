@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # LLM
     llm_provider: Literal["gemini", "anthropic", "openai", "ollama"] = "gemini"
     model_name: str = "gemini-2.5-pro" 
-    temperature: float = 0.1
+    temperature: float = 0.0
     max_tokens: int = 8192
     
     # API Keys & Gemini Specifics
@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore" 
+        extra="ignore",
+        env_prefix="RE_"
     )
 
 settings = Settings()
