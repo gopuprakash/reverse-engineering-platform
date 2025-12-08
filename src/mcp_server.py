@@ -7,6 +7,7 @@ from src.prompts import render_prompt
 from src.exceptions import ParseError, LLMError
 from src.utils import retry_async
 from loguru import logger
+from src.chunking import UniversalChunker
 
 class RepoMCPServer:
     def __init__(self, repo_manager: RepoManager):
@@ -22,22 +23,11 @@ class RepoMCPServer:
         try:
             full_code = self.repo_manager.read_file(file_path)
             
-            # --- Fix C: Sliding Window Chunking ---
-            CHUNK_SIZE = 25000
-            OVERLAP = 1000
+            # Initialize Universal Chunker
+            chunker = UniversalChunker(full_code, language_id=language)
+            chunks = chunker.chunk()
             
-            chunks = []
-            if len(full_code) <= CHUNK_SIZE:
-                chunks = [full_code]
-            else:
-                start = 0
-                while start < len(full_code):
-                    end = min(start + CHUNK_SIZE, len(full_code))
-                    chunks.append(full_code[start:end])
-                    if end == len(full_code):
-                        break
-                    start += (CHUNK_SIZE - OVERLAP)
-                logger.info(f"Splitting {file_path} into {len(chunks)} chunks for analysis")
+            logger.info(f"Splitting {file_path} into {len(chunks)} chunks using {chunker.language_id} parser")
 
             all_rules = []
             
