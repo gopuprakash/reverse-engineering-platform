@@ -1,5 +1,6 @@
 # src/config.py
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 from pathlib import Path
 from typing import Literal
 
@@ -15,16 +16,21 @@ class Settings(BaseSettings):
     temperature: float = 0.1
     max_tokens: int = 8192
     
-    # Gemini-specific
-    gemini_project_id: str | None = None  # Optional: for Vertex AI
-    gemini_location: str = "us-central1"   # Only needed for Vertex AI
+    # API Keys & Gemini Specifics
+    # FIX: Renamed to match the standard GOOGLE_API_KEY variable
+    google_api_key: str = Field(validation_alias="GOOGLE_API_KEY")
+    gemini_project_id: str | None = None
+    gemini_location: str = "us-central1"
 
     # Database
     kb_db_name: str = "reverse_engineering_kb"
     kb_db_user: str = "postgres"
-    kb_db_password: str = ""
     kb_db_host: str = "localhost"
     kb_db_port: int = 5432
+
+    # Project Configuration
+    project_id: str = "default-project"
+    project_name: str = "Default Analysis Project"
 
     # Processing
     max_concurrent_jobs: int = 6
@@ -34,6 +40,11 @@ class Settings(BaseSettings):
         "dist", "build", "env", ".env", "bin", "obj"
     }
 
-    model_config = {"env_prefix": "RE_", "case_sensitive": False}
+    # FIX: Adjusted configuration to ensure .env is read correctly
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore" 
+    )
 
 settings = Settings()

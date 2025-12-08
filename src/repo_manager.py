@@ -2,17 +2,40 @@
 from pathlib import Path
 from typing import Iterable
 import git
+import hashlib
+
+from loguru import logger
 
 class RepoManager:
     def __init__(self, config=None):
         self.root = Path("C:/reverse-engineer/projects").resolve()
 
     def ensure_local_repo(self, path_or_url: str) -> str:
+        # Check if it's a local path first
         path = Path(path_or_url)
         if path.exists():
             return str(path.resolve())
-        # For now, just return the path — we'll add git clone later
-        return path_or_url
+            
+        # If not local, assume it's a git URL
+        if path_or_url.endswith(".git") or "http" in path_or_url:
+            # Create a unique folder name based on the URL hash to avoid collisions
+            repo_hash = hashlib.md5(path_or_url.encode()).hexdigest()[:8]
+            repo_name = path_or_url.split("/")[-1].replace(".git", "")
+            target_dir = self.root / f"{repo_name}_{repo_hash}"
+            
+            if target_dir.exists():
+                logger.info(f"Repository already exists at {target_dir}")
+                return str(target_dir)
+                
+            logger.info(f"Cloning {path_or_url} to {target_dir}...")
+            try:
+                git.Repo.clone_from(path_or_url, target_dir)
+                return str(target_dir)
+            except Exception as e:
+                logger.error(f"Failed to clone repository: {e}")
+                raise
+        
+        raise ValueError(f"Invalid path or URL: {path_or_url}")
 
     def list_source_files(self, root_path: str, extensions=(".py", ".go", ".cs", ".js", ".ts", ".java")) -> Iterable[str]:
         root = Path(root_path)

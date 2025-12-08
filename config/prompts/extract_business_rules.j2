@@ -1,21 +1,28 @@
 Analyze this {{ language }} code and extract all business logic.
 
-Code (max 12000 chars):
+{% if project_structure %}
+### Project Context (File Structure)
+The code below belongs to a project with the following structure. Use this to understand imports and dependencies:
+{{ project_structure }}
+{% endif %}
+
+### Code to Analyze
 {{ code }}
 
+### Instructions
 Return strict JSON with this schema:
 {
   "business_rules": [
     {
-      "title": str,
-      "description": str,
+      "title": "Short descriptive title",
+      "description": "Detailed explanation of the logic",
       "rule_type": "validation|calculation|workflow|eligibility|constraint|configuration",
-      "conditions": [...],
-      "actions": [...],
-      "affected_entities": [str],
+      "conditions": ["List of conditions that trigger this rule"],
+      "actions": ["List of outcomes or side effects"],
+      "affected_entities": ["List of variables, database tables, or classes affected"],
       "line_start": int,
       "line_end": int,
-      "code_snippet": str,
+      "code_snippet": "The exact code implementing the rule (max 500 chars)",
       "confidence": float
     }
   ]
