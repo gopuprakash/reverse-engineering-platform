@@ -1,11 +1,26 @@
+# codebases:
+#  - id: order-management-system
+#   name: Order Management System
+#   source: C:/srv/repos/Order-Management-System
+#    language: python
+#    priority: 1
+#   entry_points:
+#    - main.py
+
 codebases:
-  - id: order-management-system
-    name: Order Management System
-    source: C:/srv/repos/Order-Management-System
-    language: python
+  - id: carrier-management-system
+    name: Carrier Management System
+    # FIX 1: Use forward slashes (/) or double backslashes (\\) to be safe
+    source: "C:/Users/Admin/Documents/AcuverDocs/CMS/acuver-cms-master/acuver-cms-master"
+    language: java
     priority: 1
     entry_points:
-      - main.py
+      # FIX 2: Remove the leading '\'. Paths must be RELATIVE to the 'source' folder.
+      - "acuver-cms-admin/src/main/java/com/acuver/AdminApp.java"
+      - "acuver-cms-auth/src/main/java/com/acuver/AuthApp.java"
+      - "acuver-cms-gateway/src/main/java/com/acuverGatewayApp.java"
+      - "acuver-cms-operations/src/main/java/com/acuver/AcuverCmsOperationsApplication.java"
+
 
  # - id: payment-gateway
  #  name: Legacy Payment Gateway

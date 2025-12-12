@@ -1,0 +1,60 @@
+You are a Senior Technical Writer and Software Architect.
+Your task is to generate a comprehensive **Project Summary Report** in Markdown format based on the analyzed code and extracted business rules.
+
+**Project Name:** {{ project_name }}
+**Date:** {{ date }}
+
+---
+
+## Input Data
+
+### 1. Extracted Business Rules & Logic
+{% for rule in business_rules %}
+- **File:** `{{ rule.file_path }}`
+  - **Rule:** {{ rule.title }}
+  - **Description:** {{ rule.description }}
+{% endfor %}
+
+### 2. Code Structure (Summaries)
+{% for summary in code_summaries %}
+- **File:** `{{ summary.file_path }}`
+  - **Summary:** {{ summary.summary }}
+{% endfor %}
+
+### 3. Dependency Graph (Top Edges)
+{% for edge in dependencies %}
+- `{{ edge.source_file }}` -> `{{ edge.target_file }}` ({{ edge.relation_type }})
+{% endfor %}
+
+---
+
+## Output Instructions
+
+Using the data above, write a professional **Technical Design & Business Requirements Document (BRD)**.
+
+The report MUST match this structure:
+
+# [Project Name] - Technical Analysis Report
+
+## 1. Executive Summary
+*High-level overview of what this application does, its core purpose, and target audience.*
+
+## 2. Business Requirements
+*Synthesize the extracted "Business Rules" into a coherent list of functional requirements.*
+*Group them logically (e.g., "User Management", "Order Processing").*
+
+## 3. System Architecture
+*Describe the high-level architecture inferred from the code summaries and dependencies.*
+*Mention key frameworks, database interactions, and design patterns used.*
+
+## 4. Key Components & Implementation
+*Deep dive into the most important files/modules.*
+*Explain how the core business logic is implemented technically.*
+
+## 5. Data Model (Inferred)
+*Describe the likely database schema or data structures based on the code.*
+
+---
+
+**Tone:** Professional, objective, and detailed.
+**Format:** Clean Markdown errors. Use tables or lists where appropriate.

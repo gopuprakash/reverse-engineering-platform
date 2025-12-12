@@ -1,5 +1,4 @@
 # src/llm/gemini.py
-import os
 import asyncio
 import google.generativeai as genai
 from loguru import logger
@@ -8,7 +7,8 @@ from src.config import settings
 class GeminiClient:
     def __init__(self):
         try:
-            api_key = os.getenv("GOOGLE_API_KEY")
+            #api_key = os.getenv("GOOGLE_API_KEY")
+            api_key = settings.google_api_key
             if not api_key:
                 raise ValueError("GOOGLE_API_KEY not set! Get it from: https://aistudio.google.com/app/apikey")
 
@@ -34,10 +34,19 @@ class GeminiClient:
             if system:
                 content.insert(0, system)
 
-            # No need to pass generation_config again — it's baked into the model!
+            # Override config if response_format is requested
+            gen_config = None
+            if response_format == "text":
+                gen_config = genai.types.GenerationConfig(
+                    temperature=settings.temperature,
+                    max_output_tokens=settings.max_tokens,
+                    response_mime_type="text/plain" 
+                )
+            
             response = await asyncio.to_thread(
                 self.model.generate_content,
-                content
+                content,
+                generation_config=gen_config
             )
             return response.text.strip()
 

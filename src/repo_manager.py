@@ -1,5 +1,4 @@
-﻿import os
-from pathlib import Path
+﻿from pathlib import Path
 from typing import Iterable
 import git
 import hashlib
@@ -17,7 +16,12 @@ class RepoManager:
             return str(path.resolve())
             
         # If not local, assume it's a git URL
-        if path_or_url.endswith(".git") or "http" in path_or_url:
+        # Check for common git URL patterns
+        is_git_url = (
+            path_or_url.startswith(("http://", "https://", "git://", "ssh://", "git@"))
+            or path_or_url.endswith(".git")
+        )
+        if is_git_url:
             # Create a unique folder name based on the URL hash to avoid collisions
             repo_hash = hashlib.md5(path_or_url.encode()).hexdigest()[:8]
             repo_name = path_or_url.split("/")[-1].replace(".git", "")

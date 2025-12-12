@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     project_name: str = "Default Analysis Project"
 
     # Processing
-    max_concurrent_jobs: int = 6
+    max_concurrent_jobs: int = 10
     file_extensions: tuple[str, ...] = (".py", ".cs", ".js", ".ts", ".java")
     exclude_dirs: set[str] = {
         ".git", "venv", ".venv", "node_modules", "__pycache__",

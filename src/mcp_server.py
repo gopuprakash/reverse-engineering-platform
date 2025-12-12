@@ -89,3 +89,23 @@ class RepoMCPServer:
         except json.JSONDecodeError as e:
             logger.warning(f"JSON parse failed for {context}: {e}\nRaw output:\n{text[:1000]}")
             return {"raw_output": text, "parse_error": str(e), "business_rules": []}
+
+    @retry_async(max_retries=2)
+    async def generate_project_summary(self, context_data: dict) -> str:
+        """
+        Generates the final markdown report.
+        """
+        try:
+            prompt = render_prompt("generate_final_report", **context_data)
+            
+            # Use a higher token limit for the report if possible, or standard
+            response = await self.llm.complete(
+                prompt=prompt,
+                system="You are an expert technical writer.",
+                response_format="text" # Return Raw Markdown
+            )
+            return response
+            
+        except Exception as e:
+            logger.error(f"Failed to generate report: {e}")
+            return f"# Error Generating Report\n\n{str(e)}"

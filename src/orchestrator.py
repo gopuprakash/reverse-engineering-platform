@@ -20,6 +20,7 @@ from src.db.models import Project, AnalysisRun
 # Static Analysis (The Indexer)
 # Note: Ensure src/static_analysis.py exists with a StaticAnalyzer class
 from src.static_analysis import StaticAnalyzer 
+from src.reporting import ReportGenerator 
 
 async def run_analysis():
     """
@@ -52,6 +53,7 @@ async def run_analysis():
         kb_manager = KnowledgeBaseManager() # Manages Business Rules storage
         graph_repo = GraphRepository(db_session) # Manages Dependency Graph
         static_analyzer = StaticAnalyzer(repo_manager) # Parses imports/signatures
+        report_generator = ReportGenerator(db_session, mcp_server) # Phase 4
 
         # ---------------------------------------------------------
         # PHASE 1: DISCOVERY & REGISTRATION
@@ -60,6 +62,7 @@ async def run_analysis():
         
         # Structure: (project_id, file_path, language, run_id)
         active_files: List[Tuple[str, str, str, str]] = []
+        active_runs: List[Tuple[str, str]] = [] # (project_name, run_id)
         
         for cb_config in config_data.get("codebases", []):
             try:
@@ -82,6 +85,7 @@ async def run_analysis():
                 db_session.add(run_record)
                 db_session.commit()
                 logger.info(f"Started Run {run_id} for {metadata.name}")
+                active_runs.append((metadata.name, str(run_id)))
 
                 # D. List Files
                 files = list(repo_manager.list_source_files(local_path))
@@ -181,6 +185,22 @@ async def run_analysis():
         
         success_count = sum(1 for r in results if r is True)
         logger.success(f"Analysis Complete. Processed {success_count}/{len(active_files)} files successfully.")
+
+        # ---------------------------------------------------------
+        # PHASE 4: REPORTING
+        # ---------------------------------------------------------
+        logger.info("--- PHASE 4: REPORT GENERATION ---")
+        
+        for proj_name, rid in active_runs:
+            try:
+                # Filter files for this specific run
+                run_files = [f for _, f, _, r in active_files if str(r) == rid]
+                if not run_files:
+                    logger.warning(f"No active files found for run {rid}, report may be incomplete.")
+                
+                await report_generator.generate_report(rid, proj_name, run_files)
+            except Exception as e:
+                logger.error(f"Failed to generate report for {proj_name}: {e}")
 
     except Exception as e:
         logger.critical(f"Orchestrator crashed: {e}")

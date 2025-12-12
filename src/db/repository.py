@@ -29,6 +29,9 @@ class BusinessRuleRepository:
             self.db.add_all(objects)
             self.db.commit()
 
+    def get_all_rules(self, run_id: str):
+        return self.db.query(BusinessRule).filter(BusinessRule.run_id == run_id).all()
+
 class GraphRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -71,3 +74,10 @@ class GraphRepository:
             return "" # No context found
             
         return "\n\n".join(context_parts)
+
+    def get_summaries_for_files(self, file_paths: list[str]):
+        return self.db.query(CodeSummary).filter(CodeSummary.file_path.in_(file_paths)).all()
+
+    def get_dependencies_for_files(self, file_paths: list[str]):
+        # Get edges where the source is in the active file list
+        return self.db.query(FileDependency).filter(FileDependency.source_file.in_(file_paths)).limit(200).all()
