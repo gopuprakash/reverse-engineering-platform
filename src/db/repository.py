@@ -11,6 +11,15 @@ class BusinessRuleRepository:
         self.db.add(run)
         self.db.commit()
 
+    def update_run_status(self, run_id: str, status: str):
+        """
+        Updates the status of an existing AnalysisRun.
+        """
+        run = self.db.query(AnalysisRun).filter(AnalysisRun.run_id == run_id).first()
+        if run:
+            run.status = status
+            self.db.commit()
+
     def bulk_insert_rules(self, rules_data: list[dict], run_id: str):
         objects = []
         for r in rules_data:
@@ -31,6 +40,16 @@ class BusinessRuleRepository:
 
     def get_all_rules(self, run_id: str):
         return self.db.query(BusinessRule).filter(BusinessRule.run_id == run_id).all()
+
+    def get_file_paths_for_run(self, run_id: str) -> list[str]:
+        """
+        Returns a list of distinct file paths associated with a specific run.
+        Used to filter CodeSummary and FileDependency tables which lack run_id.
+        """
+        results = self.db.query(BusinessRule.file_path)\
+            .filter(BusinessRule.run_id == run_id)\
+            .distinct().all()
+        return [r[0] for r in results]
 
 class GraphRepository:
     def __init__(self, db: Session):

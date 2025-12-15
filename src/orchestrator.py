@@ -52,6 +52,10 @@ async def run_analysis():
         mcp_server = RepoMCPServer(repo_manager)
         kb_manager = KnowledgeBaseManager() # Manages Business Rules storage
         graph_repo = GraphRepository(db_session) # Manages Dependency Graph
+        # We need rule_repo directly in orchestrator to update status
+        from src.db.repository import BusinessRuleRepository
+        rule_repo = BusinessRuleRepository(db_session)
+        
         static_analyzer = StaticAnalyzer(repo_manager) # Parses imports/signatures
         report_generator = ReportGenerator(db_session, mcp_server) # Phase 4
 
@@ -141,7 +145,9 @@ async def run_analysis():
 
         # Update run status
         # Note: In a real multi-project run, we'd update each run_id. 
-        # For simplicity, we assume we are running the context of the last active run or handle globally.
+        # For simplicity, based on current active_runs list.
+        for _, rid in active_runs:
+            rule_repo.update_run_status(rid, "ANALYZING")
 
         # ---------------------------------------------------------
         # PHASE 3: ANALYSIS (LLM + GRAPH RAG)
@@ -189,6 +195,9 @@ async def run_analysis():
         # ---------------------------------------------------------
         # PHASE 4: REPORTING
         # ---------------------------------------------------------
+        for _, rid in active_runs:
+            rule_repo.update_run_status(rid, "REPORTING")
+
         logger.info("--- PHASE 4: REPORT GENERATION ---")
         
         for proj_name, rid in active_runs:
@@ -198,9 +207,15 @@ async def run_analysis():
                 if not run_files:
                     logger.warning(f"No active files found for run {rid}, report may be incomplete.")
                 
-                await report_generator.generate_report(rid, proj_name, run_files)
+                # Centralized, safe report generation
+                await report_generator.generate_report_safe(rid, proj_name, run_files)
+                
+                # Mark as completed
+                rule_repo.update_run_status(rid, "COMPLETED")
+                
             except Exception as e:
                 logger.error(f"Failed to generate report for {proj_name}: {e}")
+                rule_repo.update_run_status(rid, "FAILED")
 
     except Exception as e:
         logger.critical(f"Orchestrator crashed: {e}")
