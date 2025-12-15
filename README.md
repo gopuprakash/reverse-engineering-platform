@@ -215,28 +215,57 @@ python run.py
 - **Phase 1 (Discovery):** The tool checks config/codebases.yaml, clones any git repos, and registers the project in the DB.
 - **Phase 2 (Indexing):** It scans all files to build the **Dependency Graph** (finding imports and definitions).
 - **Phase 3 (Analysis):** It sends each file to Gemini (LLM) along with the context of its dependencies to extract business rules.
+- **Phase 4 (Reporting):** Generates a comprehensive project summary report in Markdown, including Business Rules, Code Summaries, and Dependency Graphs.
 - **Completion:** Check the logs/ folder for detailed outputs.
 
-**8\. Viewing Results**
+**8\. Report Generation**
 
-Currently, results are stored in the PostgreSQL database. You can query them using a tool like **pgAdmin** or **DBeaver**.
+The platform generates human-readable Markdown reports for each analysis run.
+
+**Automatic Reporting**
+Reports are automatically generated at the end of Phase 4 and saved to the `reports/` directory.
+- **Format:** `reports/{Project_Name}_{Run_ID}_{Timestamp}_Summary.md`
+
+**Standalone Report Generator**
+You can regenerate a report for a specific past analysis run without re-running the entire analysis (saving time and tokens).
+
+**Usage:**
+```powershell
+python generate_report_only.py --run-id <YOUR_RUN_UUID>
+```
+*Note: You can find the Run ID in the existing report filenames or by querying the `analysis_runs` table.*
+
+**Rate Limit Handling (Smart Throttling)**
+The system includes built-in intelligence to handle LLM rate limits (429 Errors):
+- **Predictive Throttling:** Estimates token usage before generating reports and automatically pauses to refill the quota if the payload is too large.
+- **Smart Retries:** Parses "Retry-After" headers from the API to wait exactly as long as needed.
+
+**9\. Viewing Results**
+
+**Option A: Generated Reports**
+Open the `reports/` directory to view the detailed Markdown summaries.
+
+**Option B: Database Queries**
+Results are stored in PostgreSQL. You can query them using a tool like **pgAdmin** or **DBeaver**.
 
 **Useful SQL Queries:**
 
+- **Check Analysis Run Status:**
+```sql
+SELECT run_id, project_id, status, created_at FROM analysis_runs ORDER BY created_at DESC;
+```
+
 - **See all Extracted Rules:**
-
-SQL
-
+```sql
 SELECT title, description, code_snippet FROM business_rules;
+```
 
 - **See Rules for a Specific File:**
-
-SQL
-
-SELECT \* FROM business_rules WHERE file_path LIKE '%order_strategy.py%';
+```sql
+SELECT * FROM business_rules WHERE file_path LIKE '%order_strategy.py%';
+```
 
 - **Check Dependency Graph:**
-
-SQL
-
-SELECT \* FROM file_dependencies LIMIT 20;
+```sql
+SELECT * FROM file_dependencies LIMIT 20;
+```
