@@ -33,6 +33,11 @@ class UniversalChunker:
             "split_nodes": {"function_declaration", "method_declaration", "type_declaration"},
             "context_nodes": {"import_declaration", "package_clause"},
             "name_field": "name"
+        },
+        "javascript": {
+            "split_nodes": {"class_declaration", "function_declaration", "method_definition", "arrow_function"},
+            "context_nodes": {"import_statement", "export_statement", "lexical_declaration", "variable_declaration"}, # Includes const x = require(...)
+            "name_field": "name"
         }
     }
 
@@ -47,12 +52,35 @@ class UniversalChunker:
             self.lang_def = get_language(self.language_id)
             self.config = self.LANGUAGE_CONFIG.get(self.language_id)
         except Exception as e:
-            print(f"Warning: Could not load parser for {language_id}: {e}")
-            self.config = None
+            # Fallback: Try manual import for specific languages
+            try:
+                if self.language_id == "c_sharp":
+                    import tree_sitter_c_sharp
+                    # Direct approach matching recent tree-sitter:
+                    lang_capsule = tree_sitter_c_sharp.language()
+                    self.lang_def = tree_sitter.Language(lang_capsule)
+                    self.parser = tree_sitter.Parser(self.lang_def)
+                    self.config = self.LANGUAGE_CONFIG.get(self.language_id)
+                elif self.language_id == "javascript":
+                    try:
+                        import tree_sitter_javascript
+                        self.lang_def = tree_sitter_javascript.language()
+                    except ImportError:
+                        # Try js alias if needed, though usually it's tree_sitter_javascript
+                        pass
+                    
+                    self.parser = tree_sitter.Parser()
+                    self.parser.set_language(self.lang_def)
+                    self.config = self.LANGUAGE_CONFIG.get(self.language_id)
+                else:
+                    raise e
+            except Exception as fallback_error:
+                print(f"Warning: Could not load parser for {language_id} (Fallback also failed): {fallback_error}")
+                self.config = None
 
     def _normalize_lang_id(self, lang: str) -> str:
         # Map common names to tree-sitter identifiers
-        mapping = {"cs": "c_sharp", "c#": "c_sharp", "golang": "go", "py": "python"}
+        mapping = {"cs": "c_sharp", "c#": "c_sharp", "golang": "go", "py": "python", "js": "javascript", "ts": "javascript"}
         return mapping.get(lang.lower(), lang.lower())
 
     def chunk(self) -> List[CodeChunk]:

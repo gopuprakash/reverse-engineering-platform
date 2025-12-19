@@ -7,20 +7,44 @@
 #   entry_points:
 #    - main.py
 
-codebases:
-  - id: carrier-management-system
-    name: Carrier Management System
-    # FIX 1: Use forward slashes (/) or double backslashes (\\) to be safe
-    source: "C:/Users/Admin/Documents/AcuverDocs/CMS/acuver-cms-master/acuver-cms-master"
-    language: java
-    priority: 1
-    entry_points:
-      # FIX 2: Remove the leading '\'. Paths must be RELATIVE to the 'source' folder.
-      - "acuver-cms-admin/src/main/java/com/acuver/AdminApp.java"
-      - "acuver-cms-auth/src/main/java/com/acuver/AuthApp.java"
-      - "acuver-cms-gateway/src/main/java/com/acuverGatewayApp.java"
-      - "acuver-cms-operations/src/main/java/com/acuver/AcuverCmsOperationsApplication.java"
+#codebases:
+  # - id: carrier-management-system
+    # name: Carrier Management System
+    # # FIX 1: Use forward slashes (/) or double backslashes (\\) to be safe
+    # source: "C:/Users/Admin/Documents/AcuverDocs/CMS/acuver-cms-master/acuver-cms-master"
+    # language: java
+    # priority: 1
+    # entry_points:
+      # # FIX 2: Remove the leading '\'. Paths must be RELATIVE to the 'source' folder.
+      # - "acuver-cms-admin/src/main/java/com/acuver/AdminApp.java"
+      # - "acuver-cms-auth/src/main/java/com/acuver/AuthApp.java"
+      # - "acuver-cms-gateway/src/main/java/com/acuverGatewayApp.java"
+      # - "acuver-cms-operations/src/main/java/com/acuver/AcuverCmsOperationsApplication.java"
 
+
+      
+# codebases:      
+#     - id: nopCommerce
+#       name: nopCommerce - free and open-source eCommerce solution
+#       source: "C:/Users/Admin/Downloads/nopCommerce-develop/nopCommerce-develop"
+#       language: cs
+#       priority: 1
+#       entry_points:
+#         - "src/Presentation/Nop.Web/Program.cs"
+#         - "src/Presentation/Nop.Web.Framework/Infrastructure/NopStartup.cs"      
+#         - "src/Presentation/Nop.Web.Framework/Infrastructure/Extensions/ServiceCollectionExtensions.cs"
+
+codebases:      
+    - id: eShopOnWeb
+      name: eShopOnWeb - Microsoft eShopOnWeb ASP.NET Core Reference Application
+      source: "C:/Users/Admin/Downloads/eShopOnWeb-main"
+      language: cs
+      priority: 1
+      entry_points:
+        - "src/Web/Program.cs"
+        - "src/PublicApi/Program.cs"      
+        - "src/BlazorAdmin/Program.cs"
+        - "infrastructure/Data/WebContextSeed.cs"
 
  # - id: payment-gateway
  #  name: Legacy Payment Gateway

@@ -15,6 +15,16 @@ class RepoMCPServer:
         self.llm = get_llm_client()
 
     @retry_async(max_retries=3)
+    async def _call_llm_safe(self, prompt: str, system: str, response_format: str) -> str:
+        """
+        Executes LLM call with built-in retries for 429/RateLimits.
+        """
+        return await self.llm.complete(
+            prompt=prompt,
+            system=system,
+            response_format=response_format
+        )
+
     async def extract_business_rules_from_file(self, file_path: str, language: str = "python", context: str = "") -> dict:
         """
         Analyzes a file for business rules.
@@ -40,7 +50,7 @@ class RepoMCPServer:
                     project_structure=context
                 )
 
-                raw = await self.llm.complete(
+                raw = await self._call_llm_safe(
                     prompt=prompt,
                     system="You are an expert reverse engineer. Return ONLY valid JSON matching the schema.",
                     response_format="json"
@@ -90,22 +100,16 @@ class RepoMCPServer:
             logger.warning(f"JSON parse failed for {context}: {e}\nRaw output:\n{text[:1000]}")
             return {"raw_output": text, "parse_error": str(e), "business_rules": []}
 
-    @retry_async(max_retries=2)
     async def generate_project_summary(self, context_data: dict) -> str:
         """
         Generates the final markdown report.
         """
-        try:
-            prompt = render_prompt("generate_final_report", **context_data)
-            
-            # Use a higher token limit for the report if possible, or standard
-            response = await self.llm.complete(
-                prompt=prompt,
-                system="You are an expert technical writer.",
-                response_format="text" # Return Raw Markdown
-            )
-            return response
-            
-        except Exception as e:
-            logger.error(f"Failed to generate report: {e}")
-            return f"# Error Generating Report\n\n{str(e)}"
+        prompt = render_prompt("generate_final_report", **context_data)
+        
+        # Use a higher token limit for the report if possible, or standard
+        # _call_llm_safe handles retries automatically
+        return await self._call_llm_safe(
+            prompt=prompt,
+            system="You are an expert technical writer.",
+            response_format="text" # Return Raw Markdown
+        )
